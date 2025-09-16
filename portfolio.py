@@ -1,23 +1,24 @@
 import streamlit as st
 import pandas as pd
-from pyairtable import Api # hace más sencillo para manejar la API con AIRTABLE
+from pyairtable import Api  # hace más sencillo para manejar la API con AIRTABLE
 from datetime import datetime
 
 # Configuración de la página
 st.set_page_config(
-	page_title = "Marcos Mata - Portfolio",
-	page_icon = "🌌",
-	layout = "wide",
-	initial_sidebar_state = "expanded"
+    page_title="Marcos Mata - Portfolio",
+    page_icon="🌌",
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
 # Cargamos la fecha actual
 today = datetime.today().strftime("%Y")
 
 # Cargamos librerías de MaterializeCSS, Material Icons y Font Awesome usando markdown
-st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">', unsafe_allow_html = True)
-st.markdown('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">', unsafe_allow_html = True)
-st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer" />', unsafe_allow_html = True)
+st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">', unsafe_allow_html=True)
+st.markdown('<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">',
+            unsafe_allow_html=True)
+st.markdown('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css" integrity="sha512-Evv84Mr4kqVGRNSgIGL/F/aIDqQb7xQ2vcrdIwxfjThSH8CSR7PBEakCr51Ck+w+/U6swU2Im1vVX0SVk9ABhg==" crossorigin="anonymous" referrerpolicy="no-referrer" />', unsafe_allow_html=True)
 
 # Adicionamos estilos personalizados para mejorar el diseño
 customStyle = """
@@ -48,40 +49,72 @@ customStyle = """
 # Cargamos los estilos
 st.html(customStyle)
 
+# Verificación de API Key
+if "AIRTABLE_API_KEY" not in st.secrets:
+    st.error(
+        "⚠️ No se encontró la API key en los secrets. Revisa tu configuración en Streamlit Cloud.")
+    st.stop()
+
 # Cargamos la API Key
 AIRTABLE_API_KEY = st.secrets.AIRTABLE_API_KEY
 
 # Seleccionamos el base id de Airtable
-AIRTABLE_BASE_ID='appGyrt1M9uOvi9cr'
+AIRTABLE_BASE_ID = 'appGyrt1M9uOvi9cr'
 
-# Creamos el objeto de Airtbale
+# Creamos el objeto de Airtable
 api = Api(AIRTABLE_API_KEY)
 
-# Cargamos las tablas que se encuentra en Airtable
-tblProfile = api.table(AIRTABLE_BASE_ID, 'profile')
-tblSkills = api.table(AIRTABLE_BASE_ID, 'skills')
-tblProjects = api.table(AIRTABLE_BASE_ID, 'projects')
-tblEducation = api.table(AIRTABLE_BASE_ID, 'education')
-tblSTEM = api.table(AIRTABLE_BASE_ID, 'STEM')
-tblContacts = api.table(AIRTABLE_BASE_ID, 'contacts')
+# ========== FUNCIONES CACHEADAS PARA OPTIMIZAR REQUESTS ==========
 
-# Función para tomar el primer registro no vacío, sin esto no podía acceder a los registros de Airtable
-def first_non_empty_record(table):
-  for rec in table.all():
-    if rec.get('fields'):
-      return rec['fields']
-  return {}
 
+@st.cache_data(ttl=300)  # Cache por 5 minutos
+def get_table_data(table_name):
+    """Obtiene todos los registros de una tabla con cache"""
+    try:
+        table = api.table(AIRTABLE_BASE_ID, table_name)
+        return table.all()
+    except Exception as e:
+        st.error(f"Error cargando tabla '{table_name}': {e}")
+        return []
+
+
+@st.cache_data(ttl=300)  # Cache por 5 minutos
+def get_profile_data():
+    """Obtiene el primer registro no vacío de la tabla profile"""
+    try:
+        table = api.table(AIRTABLE_BASE_ID, 'profile')
+        for rec in table.all():
+            if rec.get('fields'):
+                return rec['fields']
+        return {}
+    except Exception as e:
+        st.error(f"Error cargando perfil: {e}")
+        return {}
+
+
+def create_contact(name, email, phone, notes):
+    """Crea un nuevo contacto en Airtable"""
+    try:
+        table = api.table(AIRTABLE_BASE_ID, 'contacts')
+        table.create({"Name": name, "Email": email,
+                     "PhoneNumber": phone, "Notes": notes})
+        return True
+    except Exception as e:
+        st.error(f"Error enviando mensaje: {e}")
+        return False
+
+
+# ========== CARGA DE DATOS CON CACHE ==========
 # Extraemos los valores recuperados de la tabla "Profile"
-profile = first_non_empty_record(tblProfile)
+profile = get_profile_data()
 
 # Valores de la sección "Profile"
-name = profile.get('Name')
-profileDescription = profile.get('Description')
-profileTagline = profile.get('Tagline')
-linkedInLink = profile.get('Linkedin')
-githubLink = profile.get('GitHub')
-instagramLink = profile.get('Instagram')
+name = profile.get('Name', 'Nombre no disponible')
+profileDescription = profile.get('Description', 'Descripción no disponible')
+profileTagline = profile.get('Tagline', 'Tagline no disponible')
+linkedInLink = profile.get('Linkedin', '#')
+githubLink = profile.get('GitHub', '#')
+instagramLink = profile.get('Instagram', '#')
 
 picture_list = profile.get('Picture', [])
 picture = picture_list[0]['url'] if picture_list else None
@@ -183,7 +216,8 @@ st.html(profileHTML)
 
 
 # Creamos los tabs de Streamlit
-tabSkills,tabPortfolio,tabEducation, tabSTEM, tabContact = st.tabs(['My skills','My projects', 'Education', 'STEM Content Creation & Outreach', 'Contact'])
+tabSkills, tabPortfolio, tabEducation, tabSTEM, tabContact = st.tabs(
+    ['My skills', 'My projects', 'Education', 'STEM Content Creation & Outreach', 'Contact'])
 
 
 # Cards "Skills" con las clases CSS de MaterializeCSS
@@ -251,7 +285,10 @@ with tabSkills:
     </style>
     """, unsafe_allow_html=True)
 
-    for record in tblSkills.all():
+    # Obtenemos los datos de skills con cache
+    skills_data = get_table_data('skills')
+
+    for record in skills_data:
         skill = record.get('fields', {})
 
         # Obtenemos datos con valores por defecto
@@ -337,20 +374,27 @@ with tabPortfolio:
     </style>
     """, unsafe_allow_html=True)
 
-    for project in tblProjects.all():
+    # Obtenemos los datos de projects con cache
+    projects_data = get_table_data('projects')
+
+    for project in projects_data:
         project_data = project["fields"]
 
         # Extracción de datos
         projectName = project_data.get('Name', 'Project Name')
-        projectDescription = project_data.get('Description', 'No description available')
+        projectDescription = project_data.get(
+            'Description', 'No description available')
         projectSkils = project_data.get('Skills', [])
         projectKnowledge = project_data.get('Knowledge', [])
         projectLink = project_data.get('Link', '#')
-        projectImageUrl = project_data['Image'][0]['url'] if project_data.get('Image') else 'placeholder.jpg'
+        projectImageUrl = project_data['Image'][0]['url'] if project_data.get(
+            'Image') else 'placeholder.jpg'
 
         # Generación de chips
-        skillsHTML = "".join([f'<div class="chip green lighten-4">{p}</div>' for p in projectSkils])
-        knowledgeHTML = "".join([f'<div class="chip blue lighten-4">{p}</div>' for p in projectKnowledge])
+        skillsHTML = "".join(
+            [f'<div class="chip green lighten-4">{p}</div>' for p in projectSkils])
+        knowledgeHTML = "".join(
+            [f'<div class="chip blue lighten-4">{p}</div>' for p in projectKnowledge])
 
         # Plantilla mejorada
         projectHTML = f"""
@@ -398,14 +442,18 @@ with tabEducation:
     # Construimos las cards de educación
     edu_cards = []
 
-    for record in tblEducation.all():
+    # Obtenemos los datos de education con cache
+    education_data = get_table_data('education')
+
+    for record in education_data:
         edu = record.get('fields', {})
 
         # Obtenemos datos con valores por defecto
         uni_name = edu.get('Name', 'Institución no especificada')
         degree = edu.get('Degree', 'Grado no especificada')
         date = edu.get('Date', 'Fecha no especificada')
-        knowledge = edu.get('Knowledge', 'Conocimientos no especificados').split('#')
+        knowledge = edu.get(
+            'Knowledge', 'Conocimientos no especificados').split('#')
 
         # Plantilla de card
         card_html = f"""
@@ -472,109 +520,81 @@ with tabEducation:
 
 # Cards "STEM Content Creation & Outreach" con las clases CSS de MaterializeCSS
 with tabSTEM:
-  stem_cards = []
+    stem_cards = []
 
-  for record in tblSTEM.all():  # Tabla Airtable con tus datos de divulgación
-    stem = record.get('fields', {})
+    # Obtenemos los datos de STEM con cache
+    stem_data = get_table_data('STEM')
 
-    # Obtenemos datos desde Airtable
-    title = stem.get('Name')
-    description = stem.get('Description')
-    instagram_link = stem.get('Instagram')
+    for record in stem_data:  # Tabla Airtable con tus datos de divulgación
+        stem = record.get('fields', {})
 
-    # Plantilla de la card
-    card_html = f"""
-      <div class="col s12 m6 l4">
-        <div class="card hoverable">
-          <!-- Sección superior - Título y Descripción -->
-          <div class="card-content light-blue lighten-4">
-            <div class="row" style="margin-bottom: 0;">
-              <div class="col s12">
-                <span class="card-title blue-grey-text text-darken-4" style="font-weight: 700;">{title}</span>
-              </div>
+        # Obtenemos datos desde Airtable
+        title = stem.get('Name')
+        description = stem.get('Description')
+        instagram_link = stem.get('Instagram')
+
+        # Plantilla de la card
+        card_html = f"""
+        <div class="col s12 m6 l4">
+            <div class="card hoverable">
+                <!-- Sección superior - Título y Descripción -->
+                <div class="card-content light-blue lighten-4">
+                    <div class="row" style="margin-bottom: 0;">
+                        <div class="col s12">
+                            <span class="card-title blue-grey-text text-darken-4" style="font-weight: 700;">{title}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sección inferior - Instagram -->
+                <div class="card-content">
+                    <div class="row valign-wrapper">
+                        <div class="col s12 center">
+                            <p class="blue-grey-text text-darken-2" style="margin-top: 8px; font-size: 1.3rem;">
+                                {description}
+                            </p>
+                            <a href="{instagram_link}" target="_blank" class="btn waves-effect pink accent-3 white-text">
+                                <i class="fab fa-instagram"></i> Follow me!
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
-          </div>
-
-          <!-- Sección inferior - Instagram -->
-          <div class="card-content">
-            <div class="row valign-wrapper">
-              <div class="col s12 center">
-                <p class="blue-grey-text text-darken-2" style="margin-top: 8px; font-size: 5.0rem;">
-                  {description}
-                </p>
-                <a href="{instagram_link}" target="_blank" class="btn waves-effect pink accent-3 white-text">
-                  <i class="fab fa-instagram"></i> Follow me!
-                </a>
-              </div>
-            </div>
-          </div>
         </div>
-      </div>
-    """
-    stem_cards.append(card_html)
+        """
+        stem_cards.append(card_html)
 
-    # Contenedor principal
+    # ✅ Contenedor fuera del bucle
     container = f"""
     <div class="row">
-      {''.join(stem_cards)}
+        {''.join(stem_cards)}
     </div>
     """
 
-    # CSS personalizado
-    st.markdown("""
-    <style>
-      /* Estilos generales de la card */
-      .card {
-        border-radius: 10px;
-        overflow: hidden;
-        margin: 15px 0;
-      }
-
-      /* Título principal */
-      .card-title {
-        font-size: 1.8rem !important;
-        line-height: 1.2;
-      }
-
-      /* Descripción */
-      .blue-grey-text.text-darken-2 {
-        font-size: 1.3rem !important;
-        line-height: 1.6;
-      }
-
-      /* Botón de Instagram */
-      .btn.pink {
-        border-radius: 25px;
-        padding: 0 30px;
-        font-weight: 600;
-      }
-
-      /* Ícono Instagram */
-      .fa-instagram {
-        margin-right: 10px;
-        font-size: 1.2rem;
-      }
-    </style>
-
-    <!-- Cargar ícono de Font Awesome -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    """, unsafe_allow_html=True)
-
-    # Mostramos el contenido de STEM
     st.html(container)
 
 
 # Formulario de "Contact" con las clases CSS de MaterializeCSS
 with tabContact:
-  st.info("If you think I can help you with some of your projects or entrepreneurships, send me a message I'll contact you as soon as I can. I'm always glad to help")
-  with st.container(border = True):
-    parName = st.text_input("Your name")
-    parEmail = st.text_input("Your email")
-    parPhoneNumber = st.text_input("WhatsApp phone number, with country code")
-    parNotes = st.text_area("What can I do for you")
-    btnEnviar = st.button("Send", type = "primary")
-  if btnEnviar: # acción al hacer click en enviar
-    tblContacts.create({"Name": parName, "Email": parEmail, "PhoneNumber": parPhoneNumber, "Notes": parNotes}) # crea un diccionario
-    st.toast("Message sent") # muestra el mensaje
+    st.info("If you think I can help you with some of your projects or entrepreneurships, send me a message I'll contact you as soon as I can. I'm always glad to help")
+    with st.container(border=True):
+        parName = st.text_input("Your name")
+        parEmail = st.text_input("Your email")
+        parPhoneNumber = st.text_input(
+            "WhatsApp phone number, with country code")
+        parNotes = st.text_area("What can I do for you")
+        btnEnviar = st.button("Send", type="primary")
+    if btnEnviar:  # acción al hacer click en enviar
+        if parName and parEmail and parNotes:  # Validación básica
+            success = create_contact(
+                parName, parEmail, parPhoneNumber, parNotes)
+            if success:
+                st.toast("Message sent")  # muestra el mensaje
+                st.success("✅ Tu mensaje ha sido enviado correctamente!")
+            else:
+                st.error("❌ Hubo un error al enviar el mensaje. Intenta de nuevo.")
+        else:
+            st.warning(
+                "⚠️ Por favor completa al menos el nombre, email y mensaje.")
 
-st.markdown('<script src = "https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>', unsafe_allow_html = True)
+st.markdown('<script src = "https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>', unsafe_allow_html=True)
