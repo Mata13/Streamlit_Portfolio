@@ -130,7 +130,7 @@ githubLink = profile.get('GitHub', '#')
 instagramLink = profile.get('Instagram', '#')
 
 # Imagen ya procesada desde get_profile_data()
-picture = f"Images/{profile.get('Picture', 'placeholder.jpg')}"
+picture = f"public/{profile.get('Picture', 'placeholder.jpg')}"
 
 # Creamos la plantilla de "Perfil" con las clases CSS de MaterializeCSS
 profileHTML = f"""
