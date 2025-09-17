@@ -130,7 +130,8 @@ githubLink = profile.get('GitHub', '#')
 instagramLink = profile.get('Instagram', '#')
 
 # Imagen ya procesada desde get_profile_data()
-picture = f"public/{profile.get('Picture', 'placeholder.jpg')}"
+profle_github_raw = "https://github.com/Mata13/Streamlit_Portfolio/blob/migracion_csv/public/profile.jpg"
+picture = f"{profle_github_raw}{profile.get('Picture', 'placeholder.jpg')}"
 
 # Creamos la plantilla de "Perfil" con las clases CSS de MaterializeCSS
 profileHTML = f"""
