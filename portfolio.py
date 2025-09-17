@@ -1,11 +1,11 @@
 import streamlit as st
 import pandas as pd
-from pyairtable import Api  # hace más sencillo para manejar la API con AIRTABLE
+from pyairtable import Api  # Solo para el formulario de contacto
 from datetime import datetime
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Marcos Mata - Portfolio",
+    page_title="Marc - Portfolio",
     page_icon="🌌",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -49,52 +49,64 @@ customStyle = """
 # Cargamos los estilos
 st.html(customStyle)
 
-# Verificación de API Key
-if "AIRTABLE_API_KEY" not in st.secrets:
-    st.error(
-        "⚠️ No se encontró la API key en los secrets. Revisa tu configuración en Streamlit Cloud.")
-    st.stop()
-
-# Cargamos la API Key
-AIRTABLE_API_KEY = st.secrets.AIRTABLE_API_KEY
-
-# Seleccionamos el base id de Airtable
-AIRTABLE_BASE_ID = 'appGyrt1M9uOvi9cr'
-
-# Creamos el objeto de Airtable
-api = Api(AIRTABLE_API_KEY)
-
-# ========== FUNCIONES CACHEADAS PARA OPTIMIZAR REQUESTS ==========
+# ========== NUEVAS FUNCIONES PARA CSV ==========
 
 
-@st.cache_data(ttl=82800)  # cache por 23 horas (en vez de 5 min)
-def get_table_data(table_name):
-    """Obtiene todos los registros de una tabla con cache"""
+@st.cache_data(ttl=82800)  # Cache por 23 horas
+def load_csv(table_name):
+    """Carga un CSV desde la carpeta Data"""
     try:
-        table = api.table(AIRTABLE_BASE_ID, table_name)
-        return table.all()
+        df = pd.read_csv(f"Data/{table_name}.csv")
+        return df
     except Exception as e:
-        st.error(f"Error cargando tabla '{table_name}': {e}")
-        return []
+        st.error(f"Error cargando {table_name}.csv: {e}")
+        return pd.DataFrame()
 
 
 @st.cache_data(ttl=82800)  # Cache por 23 horas
 def get_profile_data():
-    """Obtiene el primer registro no vacío de la tabla profile"""
+    """Obtiene el primer registro del CSV profile y procesa la imagen"""
     try:
-        table = api.table(AIRTABLE_BASE_ID, 'profile')
-        for rec in table.all():
-            if rec.get('fields'):
-                return rec['fields']
+        profile_df = load_csv("profile")
+        if not profile_df.empty:
+            profile = profile_df.iloc[0].to_dict()
+
+            # Procesar campo Picture para extraer solo el nombre del archivo
+            picture_raw = profile.get("Picture", "")
+            if isinstance(picture_raw, str) and picture_raw.strip():
+                profile["Picture"] = picture_raw.split()[0]  # 'perfil.jpg'
+            else:
+                profile["Picture"] = "placeholder.jpg"
+
+            return profile
         return {}
     except Exception as e:
         st.error(f"Error cargando perfil: {e}")
         return {}
 
+# ========== FUNCIÓN PARA CONTACTO (MANTIENE AIRTABLE) ==========
+
+
+# Verificación de API Key solo para contacto
+if "AIRTABLE_API_KEY" not in st.secrets:
+    st.error(
+        "⚠️ No se encontró la API key en los secrets. El formulario de contacto no funcionará.")
+    AIRTABLE_API_KEY = None
+else:
+    AIRTABLE_API_KEY = st.secrets.AIRTABLE_API_KEY
+
+# Seleccionamos el base id de Airtable (solo para contacto)
+AIRTABLE_BASE_ID = 'appGyrt1M9uOvi9cr'
+
 
 def create_contact(name, email, phone, notes):
     """Crea un nuevo contacto en Airtable"""
+    if not AIRTABLE_API_KEY:
+        st.error("No se puede enviar el mensaje: API key no configurada")
+        return False
+
     try:
+        api = Api(AIRTABLE_API_KEY)
         table = api.table(AIRTABLE_BASE_ID, 'contacts')
         table.create({"Name": name, "Email": email,
                      "PhoneNumber": phone, "Notes": notes})
@@ -103,9 +115,10 @@ def create_contact(name, email, phone, notes):
         st.error(f"Error enviando mensaje: {e}")
         return False
 
+# ========== CARGA DE DATOS DESDE CSV ==========
 
-# ========== CARGA DE DATOS CON CACHE ==========
-# Extraemos los valores recuperados de la tabla "Profile"
+
+# Extraemos los valores recuperados del CSV "profile"
 profile = get_profile_data()
 
 # Valores de la sección "Profile"
@@ -116,9 +129,8 @@ linkedInLink = profile.get('Linkedin', '#')
 githubLink = profile.get('GitHub', '#')
 instagramLink = profile.get('Instagram', '#')
 
-picture_list = profile.get('Picture', [])
-picture = picture_list[0]['url'] if picture_list else None
-
+# Imagen ya procesada desde get_profile_data()
+picture = f"Images/{profile.get('Picture', 'placeholder.jpg')}"
 
 # Creamos la plantilla de "Perfil" con las clases CSS de MaterializeCSS
 profileHTML = f"""
@@ -214,11 +226,9 @@ st.markdown(
 # Mostramos el HTML generado
 st.html(profileHTML)
 
-
 # Creamos los tabs de Streamlit
 tabSkills, tabPortfolio, tabEducation, tabSTEM, tabContact = st.tabs(
     ['My skills', 'My projects', 'Education', 'STEM Content Creation & Outreach', 'Contact'])
-
 
 # Cards "Skills" con las clases CSS de MaterializeCSS
 with tabSkills:
@@ -285,12 +295,10 @@ with tabSkills:
     </style>
     """, unsafe_allow_html=True)
 
-    # Obtenemos los datos de skills con cache
-    skills_data = get_table_data('skills')
+    # Obtenemos los datos de skills desde CSV
+    skills_df = load_csv('skills')
 
-    for record in skills_data:
-        skill = record.get('fields', {})
-
+    for _, skill in skills_df.iterrows():
         # Obtenemos datos con valores por defecto
         skill_name = skill.get('Name', 'Habilidad sin nombre')
         skill_description = skill.get('Notes', 'Descripción no disponible')
@@ -318,7 +326,6 @@ with tabSkills:
 
     # Mostramos los skills
     st.html(container)
-
 
 # Cards "Projects" con las clases CSS de MaterializeCSS
 with tabPortfolio:
@@ -374,21 +381,42 @@ with tabPortfolio:
     </style>
     """, unsafe_allow_html=True)
 
-    # Obtenemos los datos de projects con cache
-    projects_data = get_table_data('projects')
+    # Obtenemos los datos de projects desde CSV
+    projects_df = load_csv('projects')
 
-    for project in projects_data:
-        project_data = project["fields"]
-
+    for _, project_data in projects_df.iterrows():
         # Extracción de datos
         projectName = project_data.get('Name', 'Project Name')
         projectDescription = project_data.get(
             'Description', 'No description available')
-        projectSkils = project_data.get('Skills', [])
-        projectKnowledge = project_data.get('Knowledge', [])
+
+        # Manejo de Skills y Knowledge (vienen separados por comas en tu CSV)
+        projectSkils_raw = project_data.get('Skills', '')
+        projectKnowledge_raw = project_data.get('Knowledge', '')
+
+        # Convertir a lista usando comas como separador
+        if isinstance(projectSkils_raw, str):
+            projectSkils = [s.strip()
+                            for s in projectSkils_raw.split(',') if s.strip()]
+        else:
+            projectSkils = []
+
+        if isinstance(projectKnowledge_raw, str):
+            projectKnowledge = [
+                k.strip() for k in projectKnowledge_raw.split(',') if k.strip()]
+        else:
+            projectKnowledge = []
+
         projectLink = project_data.get('Link', '#')
-        projectImageUrl = project_data['Image'][0]['url'] if project_data.get(
-            'Image') else 'placeholder.jpg'
+
+        # Procesar la columna de imagen (extrae solo el nombre del archivo)
+        image_raw = project_data.get('Image', '')
+        if isinstance(image_raw, str) and image_raw.strip():
+            # Nos quedamos sólo con el nombre antes del espacio o paréntesis
+            image_file = image_raw.split()[0]
+            projectImageUrl = f"Images/{image_file}"
+        else:
+            projectImageUrl = "Images/placeholder.jpg"
 
         # Generación de chips
         skillsHTML = "".join(
@@ -436,24 +464,48 @@ with tabPortfolio:
     # Mostramos los Projects
     st.html(projectsHTML)
 
-
 # Cards "Education" con las clases CSS de MaterializeCSS
 with tabEducation:
     # Construimos las cards de educación
     edu_cards = []
 
-    # Obtenemos los datos de education con cache
-    education_data = get_table_data('education')
+    # Obtenemos los datos de education desde CSV
+    education_df = load_csv('education')
 
-    for record in education_data:
-        edu = record.get('fields', {})
+    # Agrupamos por Name y Degree para manejar múltiples filas de Knowledge
+    grouped_education = {}
 
-        # Obtenemos datos con valores por defecto
-        uni_name = edu.get('Name', 'Institución no especificada')
-        degree = edu.get('Degree', 'Grado no especificada')
-        date = edu.get('Date', 'Fecha no especificada')
-        knowledge = edu.get(
-            'Knowledge', 'Conocimientos no especificados').split('#')
+    for _, edu in education_df.iterrows():
+        uni_name = edu.get('Name', '').strip()
+        degree = edu.get('Degree', '').strip()
+        date = edu.get('Date', '')
+        knowledge_item = edu.get('Knowledge', '').strip()
+
+        # Crear clave única para cada combinación de universidad y grado
+        key = f"{uni_name}|{degree}"
+
+        if key not in grouped_education:
+            grouped_education[key] = {
+                'Name': uni_name,
+                'Degree': degree,
+                'Date': date,
+                'Knowledge': []
+            }
+
+        # Agregar conocimiento si no está vacío
+        if knowledge_item:
+            # Limpiar el # del inicio si existe
+            clean_knowledge = knowledge_item.lstrip('#').strip()
+            if clean_knowledge:
+                grouped_education[key]['Knowledge'].append(clean_knowledge)
+
+    # Crear cards para cada entrada educativa agrupada
+    for edu_data in grouped_education.values():
+        uni_name = edu_data['Name'] if edu_data['Name'] else 'Institución no especificada'
+        degree = edu_data['Degree'] if edu_data['Degree'] else 'Grado no especificado'
+        date = edu_data['Date'] if edu_data['Date'] else 'Fecha no especificada'
+        knowledge = edu_data['Knowledge'] if edu_data['Knowledge'] else [
+            'Conocimientos no especificados']
 
         # Plantilla de card
         card_html = f"""
@@ -475,7 +527,7 @@ with tabEducation:
                 <!-- Sección inferior - Conocimientos -->
                 <div class="card-content">
                     <div class="collection" style="border: none;">
-                        {''.join([f'<div class="collection-item grey lighten-5" style="border: none; margin: 4px 0; border-radius: 4px;"> {k.strip()}</div>' for k in knowledge])}
+                        {''.join([f'<div class="collection-item grey lighten-5" style="border: none; margin: 4px 0; border-radius: 4px;"> {k}</div>' for k in knowledge])}
                     </div>
                 </div>
             </div>
@@ -517,21 +569,18 @@ with tabEducation:
     # Mostramos el contenido de Education
     st.html(container)
 
-
 # Cards "STEM Content Creation & Outreach" con las clases CSS de MaterializeCSS
 with tabSTEM:
     stem_cards = []
 
-    # Obtenemos los datos de STEM con cache
-    stem_data = get_table_data('STEM')
+    # Obtenemos los datos de STEM desde CSV
+    stem_df = load_csv('STEM')
 
-    for record in stem_data:  # Tabla Airtable con tus datos de divulgación
-        stem = record.get('fields', {})
-
-        # Obtenemos datos desde Airtable
-        title = stem.get('Name')
-        description = stem.get('Description')
-        instagram_link = stem.get('Instagram')
+    for _, stem in stem_df.iterrows():
+        # Obtenemos datos desde CSV
+        title = stem.get('Name', 'Título no disponible')
+        description = stem.get('Description', 'Descripción no disponible')
+        instagram_link = stem.get('Instagram', '#')
 
         # Plantilla de la card
         card_html = f"""
@@ -564,7 +613,7 @@ with tabSTEM:
         """
         stem_cards.append(card_html)
 
-    # ✅ Contenedor fuera del bucle
+    # Contenedor fuera del bucle
     container = f"""
     <div class="row">
         {''.join(stem_cards)}
@@ -573,8 +622,7 @@ with tabSTEM:
 
     st.html(container)
 
-
-# Formulario de "Contact" con las clases CSS de MaterializeCSS
+# Formulario de "Contact" con las clases CSS de MaterializeCSS (MANTIENE AIRTABLE)
 with tabContact:
     st.info("If you think I can help you with some of your projects or entrepreneurships, send me a message I'll contact you as soon as I can. I'm always glad to help")
     with st.container(border=True):
@@ -584,6 +632,7 @@ with tabContact:
             "WhatsApp phone number, with country code")
         parNotes = st.text_area("What can I do for you")
         btnEnviar = st.button("Send", type="primary")
+
     if btnEnviar:  # acción al hacer click en enviar
         if parName and parEmail and parNotes:  # Validación básica
             success = create_contact(
