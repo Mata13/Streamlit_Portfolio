@@ -129,7 +129,7 @@ linkedInLink = profile.get('Linkedin', '#')
 githubLink = profile.get('GitHub', '#')
 instagramLink = profile.get('Instagram', '#')
 
-# Imagen ya procesada desde get_profile_data(), servida desde .streamlit/static/public
+# Imagen desde /static/public/
 picture = f"/public/{profile.get('Picture', 'placeholder.jpg')}"
 
 # Creamos la plantilla de "Perfil" con las clases CSS de MaterializeCSS
