@@ -494,10 +494,10 @@ with tabEducation:
 
         # Agregar conocimiento si no está vacío
         if knowledge_item:
-            # Limpiar el # del inicio si existe
-            clean_knowledge = knowledge_item.lstrip('#').strip()
-            if clean_knowledge:
-                grouped_education[key]['Knowledge'].append(clean_knowledge)
+            # Dividir en subpárrafos por el símbolo '#'
+            sub_paragraphs = [p.strip()
+                              for p in knowledge_item.split('#') if p.strip()]
+            grouped_education[key]['Knowledge'].extend(sub_paragraphs)
 
     # Crear cards para cada entrada educativa agrupada
     for edu_data in grouped_education.values():
@@ -527,7 +527,7 @@ with tabEducation:
                 <!-- Sección inferior - Conocimientos -->
                 <div class="card-content">
                     <div class="collection" style="border: none;">
-                        {''.join([f'<div class="collection-item grey lighten-5" style="border: none; margin: 4px 0; border-radius: 4px;"> {k}</div>' for k in knowledge])}
+                        {''.join([f'<div class="collection-item grey lighten-5" style="border: none; margin: 4px 0; border-radius: 4px;"><p style="margin:0;">{k}</p></div>' for k in knowledge])}
                     </div>
                 </div>
             </div>
