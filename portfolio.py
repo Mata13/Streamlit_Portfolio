@@ -145,7 +145,7 @@ profileHTML = f"""
           <div class="row valign-wrapper">
             <!-- Imagen con tamaño controlado -->
             <div class="col s12 m3 center-align">
-              <img src="{picture}" alt="Profile picture" class="circle responsive-img profile-img">
+              <img src="/public/perfil.jpg" alt="Profile picture" class="circle responsive-img profile-img">
             </div>
 
             <!-- Descripción con clase para estilizar -->
