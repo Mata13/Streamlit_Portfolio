@@ -67,7 +67,7 @@ api = Api(AIRTABLE_API_KEY)
 # ========== FUNCIONES CACHEADAS PARA OPTIMIZAR REQUESTS ==========
 
 
-@st.cache_data(ttl=28800)  # cache por 8 horas (en vez de 5 min)
+@st.cache_data(ttl=82800)  # cache por 23 horas (en vez de 5 min)
 def get_table_data(table_name):
     """Obtiene todos los registros de una tabla con cache"""
     try:
@@ -78,7 +78,7 @@ def get_table_data(table_name):
         return []
 
 
-@st.cache_data(ttl=300)  # Cache por 5 minutos
+@st.cache_data(ttl=82800)  # Cache por 23 horas
 def get_profile_data():
     """Obtiene el primer registro no vacío de la tabla profile"""
     try:
