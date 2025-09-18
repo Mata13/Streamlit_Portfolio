@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 from pyairtable import Api  # Solo para el formulario de contacto
 from datetime import datetime
+import base64
+import os
 
 # Configuración de la página
 st.set_page_config(
@@ -49,7 +51,37 @@ customStyle = """
 # Cargamos los estilos
 st.html(customStyle)
 
-# ========== NUEVAS FUNCIONES PARA CSV ==========
+# ========== NUEVA FUNCIÓN PARA CONVERTIR IMÁGENES A BASE64 ==========
+
+
+def image_to_base64(image_path):
+    """Convierte una imagen a base64 para embedding en HTML"""
+    try:
+        if os.path.exists(image_path):
+            with open(image_path, "rb") as img_file:
+                img_data = img_file.read()
+                img_base64 = base64.b64encode(img_data).decode()
+
+                # Detectar el tipo de imagen por extensión
+                if image_path.lower().endswith(('.png', '.PNG')):
+                    return f"data:image/png;base64,{img_base64}"
+                elif image_path.lower().endswith(('.jpg', '.jpeg', '.JPG', '.JPEG')):
+                    return f"data:image/jpeg;base64,{img_base64}"
+                elif image_path.lower().endswith(('.gif', '.GIF')):
+                    return f"data:image/gif;base64,{img_base64}"
+                elif image_path.lower().endswith(('.webp', '.WEBP')):
+                    return f"data:image/webp;base64,{img_base64}"
+                else:
+                    # Por defecto asumimos JPEG
+                    return f"data:image/jpeg;base64,{img_base64}"
+        else:
+            st.warning(f"⚠️ Imagen no encontrada: {image_path}")
+            return None
+    except Exception as e:
+        st.error(f"❌ Error procesando imagen {image_path}: {e}")
+        return None
+
+# ========== FUNCIONES PARA CSV (SIN CAMBIOS) ==========
 
 
 @st.cache_data(ttl=82800)  # Cache por 23 horas
@@ -129,8 +161,15 @@ linkedInLink = profile.get('Linkedin', '#')
 githubLink = profile.get('GitHub', '#')
 instagramLink = profile.get('Instagram', '#')
 
-# Imagen ya procesada desde get_profile_data()
-picture = f"Images/{profile.get('Picture', 'placeholder.jpg')}"
+# ========== PROCESAMIENTO DE IMAGEN DE PERFIL CON BASE64 ==========
+picture_filename = profile.get('Picture', 'placeholder.jpg')
+picture_path = f"Images/{picture_filename}"
+picture_base64 = image_to_base64(picture_path)
+
+# Si no se pudo cargar la imagen, usar un placeholder o mostrar error
+if picture_base64 is None:
+    picture_base64 = ""  # Imagen vacía, se puede manejar en el HTML
+    st.warning(f"⚠️ No se pudo cargar la imagen de perfil: {picture_path}")
 
 # Creamos la plantilla de "Perfil" con las clases CSS de MaterializeCSS
 profileHTML = f"""
@@ -145,7 +184,7 @@ profileHTML = f"""
           <div class="row valign-wrapper">
             <!-- Imagen con tamaño controlado -->
             <div class="col s12 m3 center-align">
-              <img src="{picture}" alt="Profile picture" class="circle responsive-img profile-img">
+              {f'<img src="{picture_base64}" alt="Profile picture" class="circle responsive-img profile-img">' if picture_base64 else '<div class="circle responsive-img profile-img" style="background-color: #e0e0e0; display: flex; align-items: center; justify-content: center;"><i class="material-icons" style="font-size: 4rem; color: #9e9e9e;">person</i></div>'}
             </div>
 
             <!-- Descripción con clase para estilizar -->
@@ -409,14 +448,29 @@ with tabPortfolio:
 
         projectLink = project_data.get('Link', '#')
 
-        # Procesar la columna de imagen (extrae solo el nombre del archivo)
+        # ========== PROCESAMIENTO DE IMAGEN DEL PROYECTO CON BASE64 ==========
         image_raw = project_data.get('Image', '')
         if isinstance(image_raw, str) and image_raw.strip():
             # Nos quedamos sólo con el nombre antes del espacio o paréntesis
             image_file = image_raw.split()[0]
-            projectImageUrl = f"Images/{image_file}"
+            project_image_path = f"Images/{image_file}"
+            project_image_base64 = image_to_base64(project_image_path)
         else:
-            projectImageUrl = "Images/placeholder.jpg"
+            project_image_base64 = None
+
+        # Si no se pudo cargar la imagen, usar placeholder
+        if project_image_base64 is None:
+            # Crear un placeholder visual
+            image_html = '''
+            <div style="height:200px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        display: flex; align-items: center; justify-content: center; color: white;">
+                <i class="material-icons" style="font-size: 4rem;">image</i>
+            </div>
+            '''
+        else:
+            image_html = f'''
+            <img src="{project_image_base64}" style="object-fit: cover; height:100%; width:100%;">
+            '''
 
         # Generación de chips
         skillsHTML = "".join(
@@ -429,7 +483,7 @@ with tabPortfolio:
         <div class="card hoverable" style="height: auto; min-height: 400px;">
             <div class="card-image" style="height:200px; overflow:hidden;">
                 <a href="{projectLink}" target="_blank">
-                    <img src="{projectImageUrl}" style="object-fit: cover; height:100%; width:100%;">
+                    {image_html}
                 </a>
             </div>
             <div class="card-content" style="padding: 20px;">
