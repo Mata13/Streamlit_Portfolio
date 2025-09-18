@@ -7,7 +7,7 @@ import os
 
 # Configuración de la página
 st.set_page_config(
-    page_title="Marc - Portfolio",
+    page_title="Marcos Mata - Portfolio",
     page_icon="🌌",
     layout="wide",
     initial_sidebar_state="expanded"
