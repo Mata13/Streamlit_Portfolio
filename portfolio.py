@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 from pyairtable import Api  # Solo para el formulario de contacto
 from datetime import datetime
+import base64
+from pathlib import Path
 
 # Configuración de la página
 st.set_page_config(
@@ -64,25 +66,13 @@ def load_csv(table_name):
 
 
 @st.cache_data(ttl=82800)  # Cache por 23 horas
-def get_profile_data():
-    """Obtiene el primer registro del CSV profile y procesa la imagen"""
+def get_image_base64(image_path):
     try:
-        profile_df = load_csv("profile")
-        if not profile_df.empty:
-            profile = profile_df.iloc[0].to_dict()
-
-            # Procesar campo Picture para extraer solo el nombre del archivo
-            picture_raw = profile.get("Picture", "")
-            if isinstance(picture_raw, str) and picture_raw.strip():
-                profile["Picture"] = picture_raw.split()[0]  # 'perfil.jpg'
-            else:
-                profile["Picture"] = "placeholder.jpg"
-
-            return profile
-        return {}
-    except Exception as e:
-        st.error(f"Error cargando perfil: {e}")
-        return {}
+        with open(image_path, "rb") as image_file:
+            encoded = base64.b64encode(image_file.read()).decode()
+        return f"data:image/jpeg;base64,{encoded}"
+    except:
+        return ""
 
 # ========== FUNCIÓN PARA CONTACTO (MANTIENE AIRTABLE) ==========
 
@@ -129,8 +119,9 @@ linkedInLink = profile.get('Linkedin', '#')
 githubLink = profile.get('GitHub', '#')
 instagramLink = profile.get('Instagram', '#')
 
-# Imagen ya procesada desde get_profile_data()
-picture = f"Images/{profile.get('Picture', 'placeholder.jpg')}"
+# Obtener la imagen en base64
+image_path = f"Images/{profile.get('Picture', 'placeholder.jpg')}"
+picture_data = get_image_base64(image_path)
 
 # Creamos la plantilla de "Perfil" con las clases CSS de MaterializeCSS
 profileHTML = f"""
@@ -145,7 +136,7 @@ profileHTML = f"""
           <div class="row valign-wrapper">
             <!-- Imagen con tamaño controlado -->
             <div class="col s12 m3 center-align">
-              <img src="{picture}" alt="Profile picture" class="circle responsive-img profile-img">
+              <img src="{picture_data}" alt="Profile picture" class="circle responsive-img profile-img">
             </div>
 
             <!-- Descripción con clase para estilizar -->
